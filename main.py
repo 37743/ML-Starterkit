@@ -22,9 +22,16 @@ from kivy.clock import (mainthread,
 Config.set('input', 'mouse', 'mouse,disable_multitouch')
 
 WINDOW_SIZE = (720, 580)
-MAIN_GREEN = "45b7af"
-MAIN_GRAY = "b1b1b1"
-MAIN_COLOR = "2f323b"
+
+MAIN_COLORS = {
+    "GREEN": "45b7af",
+    "RED": "f3565d",
+    "BLUE": "65c3df",
+    "YELLOW": "f8cb00",
+    "PURPLE": "a48ad4",
+    "GRAY": "b1b1b1",
+    "COLOR": "2f323b"
+}
 
 Window.size = WINDOW_SIZE
 
@@ -68,13 +75,12 @@ class MLStarterkit(App):
             self.loadreq.text = "Loading data..."
             self.scroll_layout = ScrollView(size_hint=(0.9, 0.55),
                                     pos_hint={'center_x': 0.5, 'center_y': 0.43},
-                                    bar_color=MAIN_GREEN,
-                                    bar_inactive_color=MAIN_GRAY,
+                                    bar_color=MAIN_COLORS["GREEN"],
+                                    bar_inactive_color=MAIN_COLORS["GRAY"],
                                     bar_width=10)
             
-            self.grid_layout = GridLayout(cols=2, spacing=30, padding=10, size_hint_y=None,)
+            self.grid_layout = GridLayout(cols=2, spacing=30, padding=10, size_hint_y=None)
             self.grid_layout.bind(minimum_height=self.grid_layout.setter('height'))
-            self.scroll_layout.add_widget(self.grid_layout)
         return
     
     @thread
@@ -157,15 +163,15 @@ class MLStarterkit(App):
                                     size_hint=(0.9, 0.1),
                                     pos_hint={'center_x': 0.5, 'center_y': 0.76})
         self.file_title = Label(text="\""+self.file_path.split("/")[-1]+"\"",
-                                color=MAIN_COLOR,
+                                color=MAIN_COLORS["COLOR"],
                                 font_family="Msyhl",
                                 font_size=21,
                                 size_hint=(0.9, 0.1),
                                 pos_hint={'center_y': 0.5},
                                 halign='left')
         self.file_shape = Label(text="Shape: "+str(self.df.shape)+
-                                " File Size: "+str(round(self.df.memory_usage().sum() / 1024, 2))+" KB",
-                                color=MAIN_GRAY,
+                                " - File Size: "+str(round(self.df.memory_usage().sum() / 1024, 2))+" KB",
+                                color=MAIN_COLORS["GRAY"],
                                 font_family="Msyhl",
                                 font_size=14,
                                 size_hint=(0.9, 0.1),
@@ -175,14 +181,115 @@ class MLStarterkit(App):
         self.file_boxlayout.add_widget(self.file_shape)
         self.layout.add_widget(self.file_boxlayout)
         
-        #TODO: Add the actual data from the file to the UI
-        for i in range(60):
-            label = Label(text=f"Example {i+1}", color=MAIN_COLOR, font_family="Msyhl", font_size=14)
-            checkbox = CheckBox(color=MAIN_GREEN, size_hint=(0.2, None), height=10)
-            new_box_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint=(1, None), height=10)
-            new_box_layout.add_widget(label)
-            new_box_layout.add_widget(checkbox)
-            self.grid_layout.add_widget(new_box_layout)
+        vertical_box_layout = BoxLayout(orientation='vertical', spacing=30, size_hint_y=None)
+        vertical_box_layout.bind(minimum_height=vertical_box_layout.setter('height'))
+
+        data_grid_layout = GridLayout(cols=len(self.df.columns) if len(self.df.columns) < 7 else 8,
+                                    spacing=5,
+                                    padding=(25,0),
+                                    size_hint_y=None)
+        data_grid_layout.bind(minimum_height=data_grid_layout.setter('height'))
+
+        for num, column in enumerate(self.df.columns):
+            if num == 6:
+                button = Button(text="...",
+                                color=MAIN_COLORS["COLOR"],
+                                height=30,
+                                font_family="Msyhl",
+                                font_size=14,
+                                background_normal="",
+                                background_down="",
+                                background_color=list(MAIN_COLORS.values())[num%(len(MAIN_COLORS)-2)],
+                                size_hint_y=None)
+                data_grid_layout.add_widget(button)
+            elif (num < 6) or (num == len(self.df.columns) - 1):
+                button = Button(text=column if len(column) < 7 else column[:7]+"...",
+                                color=MAIN_COLORS["COLOR"],
+                                height=30,
+                                font_family="Msyhl",
+                                font_size=14,
+                                background_normal="",
+                                background_down="",
+                                background_color=list(MAIN_COLORS.values())[num%(len(MAIN_COLORS)-2)],
+                                size_hint_y=None)
+                data_grid_layout.add_widget(button)
+
+        for i in range(5): # 5 rows only
+            for num, column in enumerate(self.df.columns):
+                if num == 6:
+                    button = Button(text="...",
+                                    color=MAIN_COLORS["COLOR"],
+                                    height=30,
+                                    font_family="Msyhl",
+                                    font_size=14,
+                                    background_normal="",
+                                    background_color=MAIN_COLORS["GRAY"],
+                                    size_hint_y=None)
+                    data_grid_layout.add_widget(button)
+                elif (num < 6) or num == (len(self.df.columns) - 1):
+                    value = str(self.df[column][i])
+                    button = Button(text=value if len(value) < 7 else str(value)[:7]+"...",
+                                color=MAIN_COLORS["COLOR"],
+                                height=30,
+                                font_family="Msyhl",
+                                font_size=14,
+                                background_normal="",
+                                background_color=MAIN_COLORS["GRAY"],
+                                size_hint_y=None)
+                    data_grid_layout.add_widget(button)
+        vertical_box_layout.add_widget(data_grid_layout)
+            
+        data_exploration_label = Label(text="Data Exploration",
+                                    color=MAIN_COLORS["COLOR"],
+                                    font_family="Msyhl",
+                                    font_size=21,
+                                    size_hint=(0.9, 0.1),
+                                    pos_hint={'center_x': 0.5, 'center_y': 0.35})
+        vertical_box_layout.add_widget(data_exploration_label)
+
+        data_info_layout = GridLayout(cols=3, spacing=10, size_hint_y=None)
+        data_info_layout.bind(minimum_height=data_info_layout.setter('height'))
+
+        for index, column in enumerate(self.df.columns):
+            index_column_label = Button(text=f"{index}. {column}",
+                                        color=MAIN_COLORS["COLOR"],
+                                        height=30,
+                                        font_family="Msyhl",
+                                        font_size=14,
+                                        background_normal="",
+                                        background_color=list(MAIN_COLORS.values())[index%(len(MAIN_COLORS)-2)],
+                                        size_hint_y=None)
+            data_info_layout.add_widget(index_column_label)
+            non_null_count_label = Label(text=str(self.df[column].count()),
+                         color=MAIN_COLORS["COLOR"],
+                         height=30,
+                         font_family="Msyhl",
+                         font_size=14,
+                         size_hint_y=None)
+            data_info_layout.add_widget(non_null_count_label)
+            data_type_label = Label(text=str(self.df[column].dtype),
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_y=None)
+            data_info_layout.add_widget(data_type_label)
+
+        vertical_box_layout.add_widget(data_info_layout)
+
+        # #TODO: Add the actual data from the file to the UI
+        # for i in range(60):
+        #     label = Label(text=f"Example {i+1}", color=MAIN_COLORS["COLOR"], font_family="Msyhl", font_size=14)
+        #     checkbox = CheckBox(color=MAIN_COLORS["GREEN"], size_hint=(0.2, None), height=10)
+        #     new_box_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint=(1, None), height=10)
+        #     new_box_layout.add_widget(label)
+        #     new_box_layout.add_widget(checkbox)
+        #     self.grid_layout.add_widget(new_box_layout)
+
+
+        # vertical_box_layout.add_widget(self.grid_layout)
+
+        self.scroll_layout.add_widget(vertical_box_layout)
 
         self.layout.add_widget(self.scroll_layout)
 
@@ -192,7 +299,7 @@ class MLStarterkit(App):
                 font_size=14,
                 pos_hint={'center_x': 0.5},
                 background_normal="",
-                background_color=MAIN_GREEN)
+                background_color=MAIN_COLORS["GREEN"])
         perform_button.bind(on_release=lambda x: self.perform_operation())
         self.layout.add_widget(perform_button)
         return
@@ -272,7 +379,7 @@ BoxLayout:
                             size_hint=(0.3, 1),
                             pos_hint={'center_y': 0.5},
                             background_normal="",
-                            background_color=MAIN_GREEN)
+                            background_color=MAIN_COLORS["GREEN"])
         box_layout.add_widget(self.file_chooser_button)
         
         self.load_button = Button(text="LOAD FILE",
@@ -283,12 +390,12 @@ BoxLayout:
                                 size_hint=(0.3, 1),
                                 pos_hint={'center_y': 0.5},
                                 background_normal="",
-                                background_color=MAIN_GREEN)
+                                background_color=MAIN_COLORS["GREEN"])
         box_layout.add_widget(self.load_button)
         self.layout.add_widget(box_layout)
 
         self.loadreq = Label(text="Load a file (\".csv\", \".xls\", ...etc) to start.",
-                        color=MAIN_GRAY,
+                        color=MAIN_COLORS["GRAY"],
                         font_family="Msyhl",
                         font_size=21,
                         size_hint=(0.5, 0.1),
@@ -296,7 +403,7 @@ BoxLayout:
         self.layout.add_widget(self.loadreq)
         
         footer = Label(text=f"GitHub@37743 - {self.__class__.__name__} - 2024 - v{0.1}",
-                        color=MAIN_GRAY,
+                        color=MAIN_COLORS["GRAY"],
                         font_family="Msyhl",
                         font_size=12,
                         size_hint=(1, 0.1),
