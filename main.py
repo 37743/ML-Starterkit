@@ -1,21 +1,24 @@
 import pandas as pd
-import tkinter as tk
-import threading
+from tkinter import Tk
+from threading import Thread
 from kivy.app import App
 from kivy.uix.button import Button
 from kivy.uix.floatlayout import FloatLayout
 from tkinter import filedialog
 from kivy.uix.textinput import TextInput
+from kivy.uix.image import Image
 from kivy.uix.boxlayout import BoxLayout
-from kivy.graphics import Color, Rectangle
-from kivy.core.window import Window
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from kivy.uix.checkbox import CheckBox
+from kivy.uix.popup import Popup
+from kivy.graphics import Rectangle
+from kivy.core.window import Window
 from kivy.config import Config
 from kivy.lang import Builder
-import os
+from os import path
+import datetime
 
 from kivy.clock import (mainthread,
                         Clock)
@@ -43,10 +46,85 @@ def thread(function):
     Creates a new thread with a process using the input function
     '''
     def wrap(*args, **kwargs):
-        t = threading.Thread(target=function, args=args, kwargs=kwargs, daemon=True)
+        t = Thread(target=function, args=args, kwargs=kwargs, daemon=True)
         t.start()
         return t
     return wrap
+
+def popup(type):
+    '''
+    Creates a popup window based on the type.
+    Args:
+        type (str): The type of popup window to create.
+    Returns:
+        popup (Popup): The popup window created.
+    '''
+    if type == 'success':
+        popup = Popup(title='SUCCESS!',
+                      content=Image(source='Assets\\icon.png'),
+                      size_hint=(None, None), size=(350, 300),
+                      separator_color=MAIN_COLORS["GREEN"],
+                      title_align='center',
+                      background_color=MAIN_COLORS["GREEN"])
+    elif type == 'failure':
+        popup = Popup(title='CRITICAL FAILURE!',
+                      content=Image(source='Assets\\icon-fail.png'),
+                      size_hint=(None, None), size=(350, 300),
+                      separator_color=MAIN_COLORS["RED"],
+                      title_align='center',
+                      background_color=MAIN_COLORS["RED"])
+    popup.open()
+    return
+
+def remove_duplicates(df, label, columns):
+    '''
+    Removes duplicate rows from a DataFrame based on the specified columns.
+    Args:
+        df (pandas.DataFrame): The DataFrame from which duplicates are to be removed.
+        label (Label): The label widget to update with the number of duplicates.
+        columns (list): The list of columns to consider for duplicate removal.
+    Returns:
+        df (pandas.DataFrame): The DataFrame without duplicate rows.
+    '''
+    try:
+        df.drop_duplicates(subset=columns, inplace=True)
+        label.text = f"Number of Duplicates: {df.duplicated().sum()}"
+        popup(type='success')
+    except Exception as e:
+        popup(type='failure')
+        print(e)
+    return
+
+def handle_missing_values(df, method, label, columns):
+    '''
+    Handles missing values in a DataFrame based on the selected method and specified columns.
+    Args:
+        df (pandas.DataFrame): The DataFrame containing missing values.
+        method (str): The method to use for handling missing values.
+        label: The label to update with the number of missing values.
+        columns (list): The list of columns to consider for missing value handling.
+    Returns:
+        df (pandas.DataFrame): The DataFrame with missing values handled.
+    '''
+    if columns == []:
+        columns = df.columns
+    try:
+        if method == 'mean':
+            numeric_columns = df[columns].select_dtypes(include=['float64', 'int64']).columns
+            df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].mean())
+        elif method == 'median':
+            numeric_columns = df[columns].select_dtypes(include=['float64', 'int64']).columns
+            df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].median())
+        elif method == 'mode':
+            df[columns] = df[columns].fillna(df[columns].mode().iloc[0])
+        elif method == 'remove':
+            df.dropna(subset=columns, inplace=True)
+        label.text = f"Number of Missing Values: {df[columns].isnull().sum().sum()}"
+        popup(type='success')
+    except Exception as e:
+        popup(type='failure')
+        print(e)
+    return
 
 class MLStarterkit(App):
     '''
@@ -68,6 +146,7 @@ class MLStarterkit(App):
             self.load_button.disabled = True
 
             # Dataframe starts processing here
+            self.df = None
             thread = self.read_file(file_path)
 
             self.monitor_change(thread, self.load_view)
@@ -92,7 +171,7 @@ class MLStarterkit(App):
         Returns:
             df (pandas.DataFrame): The DataFrame containing the data from the file.
         '''
-        _, file_extension = os.path.splitext(file_path)
+        _, file_extension = path.splitext(file_path)
         if file_extension.lower() in ['.csv', '.txt']:
             df = pd.read_csv(file_path)
         else:
@@ -124,7 +203,7 @@ class MLStarterkit(App):
         Returns:
             self (App): The current instance of the App class.
         '''
-        root = tk.Tk()
+        root = Tk()
         root.withdraw()
         file_path = filedialog.askopenfilename()
         self.file_path_boxlayout.ids["ti"].text = file_path
@@ -132,7 +211,7 @@ class MLStarterkit(App):
         self.load_button.text = "LOAD FILE"
         self.load_button.disabled = False
         try:
-            for widget in [self.scroll_layout, self.file_boxlayout]:
+            for widget in [self.scroll_layout, self.file_boxlayout, self.button_box_layout]:
                 self.remove_scrollview(widget)
         except:
             pass
@@ -181,7 +260,7 @@ class MLStarterkit(App):
         self.file_boxlayout.add_widget(self.file_shape)
         self.layout.add_widget(self.file_boxlayout)
         
-        vertical_box_layout = BoxLayout(orientation='vertical', spacing=30, size_hint_y=None)
+        vertical_box_layout = BoxLayout(orientation='vertical', spacing=30, padding=(0,10), size_hint_y=None)
         vertical_box_layout.bind(minimum_height=vertical_box_layout.setter('height'))
 
         data_grid_layout = GridLayout(cols=len(self.df.columns) if len(self.df.columns) < 7 else 8,
@@ -190,6 +269,7 @@ class MLStarterkit(App):
                                     size_hint_y=None)
         data_grid_layout.bind(minimum_height=data_grid_layout.setter('height'))
 
+        # df.head() equivalent
         for num, column in enumerate(self.df.columns):
             if num == 6:
                 button = Button(text="...",
@@ -247,63 +327,353 @@ class MLStarterkit(App):
                                     pos_hint={'center_x': 0.5, 'center_y': 0.35})
         vertical_box_layout.add_widget(data_exploration_label)
 
-        data_info_layout = GridLayout(cols=3, spacing=10, size_hint_y=None)
-        data_info_layout.bind(minimum_height=data_info_layout.setter('height'))
+        self.data_info_layout = BoxLayout(orientation='vertical', spacing=10, size_hint_y=None)
+        self.data_info_layout.bind(minimum_height=self.data_info_layout.setter('height'))
 
         for index, column in enumerate(self.df.columns):
+            entry_layout = GridLayout(cols=4, spacing=10, padding=(25,0), size_hint_y=None)
+            entry_layout.bind(minimum_height=entry_layout.setter('height'))
+
             index_column_label = Button(text=f"{index}. {column}",
-                                        color=MAIN_COLORS["COLOR"],
-                                        height=30,
-                                        font_family="Msyhl",
-                                        font_size=14,
-                                        background_normal="",
-                                        background_color=list(MAIN_COLORS.values())[index%(len(MAIN_COLORS)-2)],
-                                        size_hint_y=None)
-            data_info_layout.add_widget(index_column_label)
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        background_normal="",
+                        background_down="",
+                        background_color=list(MAIN_COLORS.values())[index%(len(MAIN_COLORS)-2)],
+                        size_hint_y=None)
+            entry_layout.add_widget(index_column_label)
+
             non_null_count_label = Label(text=str(self.df[column].count()),
-                         color=MAIN_COLORS["COLOR"],
-                         height=30,
-                         font_family="Msyhl",
-                         font_size=14,
-                         size_hint_y=None)
-            data_info_layout.add_widget(non_null_count_label)
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_y=None)
+            entry_layout.add_widget(non_null_count_label)
+
             data_type_label = Label(text=str(self.df[column].dtype),
                         color=MAIN_COLORS["COLOR"],
                         height=30,
                         font_family="Msyhl",
                         font_size=14,
                         size_hint_y=None)
-            data_info_layout.add_widget(data_type_label)
+            entry_layout.add_widget(data_type_label)
 
-        vertical_box_layout.add_widget(data_info_layout)
+            column_checkbox = CheckBox(color=MAIN_COLORS["GREEN"],
+                                size_hint=(0.2, None),
+                                height=30)
+            entry_layout.add_widget(column_checkbox)
 
-        # #TODO: Add the actual data from the file to the UI
-        # for i in range(60):
-        #     label = Label(text=f"Example {i+1}", color=MAIN_COLORS["COLOR"], font_family="Msyhl", font_size=14)
-        #     checkbox = CheckBox(color=MAIN_COLORS["GREEN"], size_hint=(0.2, None), height=10)
-        #     new_box_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint=(1, None), height=10)
-        #     new_box_layout.add_widget(label)
-        #     new_box_layout.add_widget(checkbox)
-        #     self.grid_layout.add_widget(new_box_layout)
+            self.data_info_layout.add_widget(entry_layout)
+        vertical_box_layout.add_widget(self.data_info_layout)
 
+        data_description_label = Label(text="Data Description",
+                        color=MAIN_COLORS["COLOR"],
+                        font_family="Msyhl",
+                        font_size=21,
+                        size_hint=(0.9, 0.1),
+                        pos_hint={'center_x': 0.5, 'center_y': 0.35})
+        vertical_box_layout.add_widget(data_description_label)
+        
+        data_description_grid_layout = GridLayout(cols=9,
+                                                spacing=5,
+                                                padding=(25,0),
+                                                size_hint_y=None)
+        data_description_grid_layout.bind(minimum_height=data_description_grid_layout.setter('height'))
 
-        # vertical_box_layout.add_widget(self.grid_layout)
+        for i in ['Name', 'Count', 'Mean', 'Std', 'Min', '25%', '50%', '75%', 'Max']:
+            label = Label(text=i,
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_y=None)
+            data_description_grid_layout.add_widget(label)    
+
+        for index, column in enumerate(self.df.columns):
+            if self.df[column].dtype == 'object':
+                continue
+            button = Button(text=column if len(column) < 7 else column[:7]+"...",
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_x=1.5,
+                        size_hint_y=None,
+                        background_normal="",
+                        background_down="",
+                        background_color=list(MAIN_COLORS.values())[index%(len(MAIN_COLORS)-2)])
+            data_description_grid_layout.add_widget(button)
+
+            count = Label(text=str(self.df[column].count()),
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_y=None)
+            data_description_grid_layout.add_widget(count)
+
+            mean = Label(text=str(round(self.df[column].mean(), 2)),
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_y=None)
+            data_description_grid_layout.add_widget(mean)
+
+            std = Label(text=str(round(self.df[column].std(), 2)),
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_y=None)
+            data_description_grid_layout.add_widget(std)
+
+            min_val = Label(text=str(self.df[column].min()),
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_y=None)
+            data_description_grid_layout.add_widget(min_val)
+
+            quantile_25 = Label(text=str(self.df[column].quantile(0.25)),
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_y=None)
+            data_description_grid_layout.add_widget(quantile_25)
+
+            quantile_50 = Label(text=str(self.df[column].quantile(0.5)),
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_y=None)
+            data_description_grid_layout.add_widget(quantile_50)
+
+            quantile_75 = Label(text=str(self.df[column].quantile(0.75)),
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_y=None)
+            data_description_grid_layout.add_widget(quantile_75)
+
+            max_val = Label(text=str(self.df[column].max()),
+                        color=MAIN_COLORS["COLOR"],
+                        height=30,
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint_y=None)
+            data_description_grid_layout.add_widget(max_val)
+        vertical_box_layout.add_widget(data_description_grid_layout)
+        
+        data_preprocessing_label = Label(text="Data Preprocessing",
+                        color=MAIN_COLORS["COLOR"],
+                        font_family="Msyhl",
+                        font_size=21,
+                        size_hint=(0.9, 0.5),
+                        pos_hint={'center_x': 0.5, 'center_y': 0.35})
+        vertical_box_layout.add_widget(data_preprocessing_label)
+
+        duplicates = self.df.duplicated().sum()
+        duplicates_label = Label(text=f"Number of Duplicates: {duplicates}",
+                                color=MAIN_COLORS["COLOR"],
+                                font_family="Msyhl",
+                                font_size=14,
+                                size_hint=(0.9, 0.1),
+                                pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        vertical_box_layout.add_widget(duplicates_label)
+
+        remove_duplicates_button = Button(text="REMOVE DUPLICATES",
+                                bold=True,
+                                font_size=14,
+                                height=30,
+                                size_hint=(0.5, None),
+                                pos_hint={'center_x': 0.5, 'center_y': 0.5},
+                                background_normal="",
+                                background_color=MAIN_COLORS["GREEN"])
+        remove_duplicates_button.bind(on_release=lambda x: remove_duplicates(self.df, duplicates_label, self.perform_operation()))
+        vertical_box_layout.add_widget(remove_duplicates_button)
+
+        missing_values = self.df.isnull().sum().sum()
+
+        self.missing_values_label = Label(text=f"Number of Missing Values: {missing_values}",
+                                color=MAIN_COLORS["COLOR"],
+                                font_family="Msyhl",
+                                font_size=14,
+                                size_hint=(0.9, 0.1),
+                                pos_hint={'center_x': 0.5, 'center_y': 0.35})
+        vertical_box_layout.add_widget(self.missing_values_label)
+
+        self.button_box_layout = BoxLayout(orientation='horizontal', spacing=10, padding=(25,0), size_hint_y=None)
+        self.button_box_layout.bind(minimum_height=self.button_box_layout.setter('height'))
+
+        mean_button = Button(text="Fill with Mean",
+                     bold=True,
+                     height=30,
+                     size_hint=(0.5, None),
+                     font_size=14,
+                     pos_hint={'center_x': 0.5, 'center_y': 0.5},
+                     background_normal="",
+                     background_color=MAIN_COLORS["GREEN"])
+        
+        mean_button.bind(on_release=lambda x: handle_missing_values(self.df ,'mean', self.missing_values_label, self.perform_operation()))
+        self.button_box_layout.add_widget(mean_button)
+
+        median_button = Button(text="Fill with Median",
+                       bold=True,
+                       height=30,
+                       size_hint=(0.5, None),
+                       font_size=14,
+                       pos_hint={'center_x': 0.5, 'center_y': 0.5},
+                       background_normal="",
+                       background_color=MAIN_COLORS["GREEN"])
+        median_button.bind(on_release=lambda x: handle_missing_values(self.df, 'median', self.missing_values_label, self.perform_operation()))
+        self.button_box_layout.add_widget(median_button)
+
+        mode_button = Button(text="Fill with Mode",
+                     bold=True,
+                     height=30,
+                     size_hint=(0.5, None),
+                     font_size=14,
+                     pos_hint={'center_x': 0.5, 'center_y': 0.5},
+                     background_normal="",
+                     background_color=MAIN_COLORS["GREEN"])
+        mode_button.bind(on_release=lambda x: handle_missing_values(self.df, 'mode', self.missing_values_label, self.perform_operation()))
+        self.button_box_layout.add_widget(mode_button)
+
+        remove_button = Button(text="Drop N/A",
+                       bold=True,
+                       height=30,
+                       size_hint=(0.5, None),
+                       font_size=14,
+                       pos_hint={'center_x': 0.5, 'center_y': 0.5},
+                       background_normal="",
+                       background_color=MAIN_COLORS["GREEN"])
+        remove_button.bind(on_release=lambda x: handle_missing_values(self.df, 'remove', self.missing_values_label, self.perform_operation()))
+        self.button_box_layout.add_widget(remove_button)
+        vertical_box_layout.add_widget(self.button_box_layout)
+        
+        # Data Transformation
+        data_transformation_label = Label(text="Data Transformation",
+                                        color=MAIN_COLORS["COLOR"],
+                                        font_family="Msyhl",
+                                        font_size=21,
+                                        size_hint=(0.9, 0.5),
+                                        pos_hint={'center_x': 0.5, 'center_y': 0.35})
+        vertical_box_layout.add_widget(data_transformation_label)
+
+        transformation_labels = ['Standardization', 'Normalization', 'One-Hot Encoding',
+                                 'Label Encoding','Log Transformation',  'Polynomial Transformation']
+
+        transformation_vertical_grid_layout = GridLayout(cols=2,
+                                                        spacing=10,
+                                                        size_hint=(1, None))
+        transformation_vertical_grid_layout.bind(minimum_height=transformation_vertical_grid_layout.setter('height'))
+
+        for label in transformation_labels:
+            data_transformation_box_layout = BoxLayout(orientation='horizontal',
+                                                       spacing=10,
+                                                       size_hint=(1, None),
+                                                       height=30)
+            data_transformation_box_layout.add_widget(Label(text=label,
+                                                               color=MAIN_COLORS["COLOR"],
+                                                               font_family="Msyhl",
+                                                               font_size=14,
+                                                               size_hint=(0.8, None),
+                                                               height=30))
+            data_transformation_box_layout.add_widget(CheckBox(color=MAIN_COLORS["GREEN"],
+                                                            size_hint=(0.2, None),
+                                                            height=30))
+            transformation_vertical_grid_layout.add_widget(data_transformation_box_layout)
+        vertical_box_layout.add_widget(transformation_vertical_grid_layout)
+
+        # Data Visualization
+        data_visualization_label = Label(text="Data Visualization",
+                        color=MAIN_COLORS["COLOR"],
+                        font_family="Msyhl",
+                        font_size=21,
+                        size_hint=(0.9, 0.5),
+                        pos_hint={'center_x': 0.5, 'center_y': 0.35})
+        vertical_box_layout.add_widget(data_visualization_label)
+
+        visualization_labels = ['Histogram', 'Boxplot', 'Scatter Plot', 'Line Plot',
+                                'Bar Plot', 'Pie Chart', 'Correlation Heatmap', 'Violin Plot']
+
+        visualization_vertical_grid_layout = GridLayout(cols=2,
+                                                       spacing=10,
+                                                       size_hint=(1, None))
+        visualization_vertical_grid_layout.bind(minimum_height=visualization_vertical_grid_layout.setter('height'))
+        for label in visualization_labels:
+            data_visualization_box_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint=(1, None), height=30)
+            data_visualization_box_layout.add_widget(Label(text=label,
+                                                               color=MAIN_COLORS["COLOR"],
+                                                               font_family="Msyhl",
+                                                               font_size=14,
+                                                               size_hint=(0.8, None),
+                                                               height=30))
+            data_visualization_box_layout.add_widget(CheckBox(color=MAIN_COLORS["GREEN"],
+                                                            size_hint=(0.2, None),
+                                                            height=30))
+            visualization_vertical_grid_layout.add_widget(data_visualization_box_layout)
+        vertical_box_layout.add_widget(visualization_vertical_grid_layout)
 
         self.scroll_layout.add_widget(vertical_box_layout)
-
         self.layout.add_widget(self.scroll_layout)
 
+        self.button_box_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint=(1, 0.1))
+        
         perform_button = Button(text="PERFORM OPERATION(S)",
-                bold=True,
-                size_hint=(1, 0.1),
-                font_size=14,
-                pos_hint={'center_x': 0.5},
-                background_normal="",
-                background_color=MAIN_COLORS["GREEN"])
+            bold=True,
+            size_hint=(0.7, 1),
+            font_size=14,
+            pos_hint={'center_x': 0.5},
+            background_normal="",
+            background_color=MAIN_COLORS["GREEN"])
         perform_button.bind(on_release=lambda x: self.perform_operation())
-        self.layout.add_widget(perform_button)
+        self.button_box_layout.add_widget(perform_button)
+
+        save_button = Button(text="SAVE CSV FILE",
+            bold=True,
+            size_hint=(0.3, 1),
+            font_size=14,
+            pos_hint={'center_x': 0.5},
+            background_normal="",
+            background_color=MAIN_COLORS["GREEN"])
+        save_button.bind(on_release=lambda x: self.save_csv_file())
+        self.button_box_layout.add_widget(save_button)
+
+        self.layout.add_widget(self.button_box_layout)
         return
 
+    def save_csv_file(self):
+        '''
+        Saves the DataFrame to a CSV file.
+        Returns:
+            None
+        '''
+        try:
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+            filename = f"{self.file_path.split('/')[-1].split('.')[0]}_{timestamp}.csv"
+            # Open file dialog to choose save location
+            save_location = filedialog.asksaveasfilename(defaultextension='.csv',
+                                                        filetypes=[("CSV files", "*.csv"),
+                                                                    ("All files", "*.*")],
+                                                        initialfile=filename)
+            if save_location:
+                self.df.to_csv(save_location, index=False)
+                print(f"File saved successfully as {save_location}.")
+            else:
+                print("Save operation cancelled.")
+        except Exception as e:
+            print(e)
+        return
+    
     def perform_operation(self):
         '''
         Performs the selected operation based on the checkboxes in the UI.
@@ -311,16 +681,14 @@ class MLStarterkit(App):
             None
         '''
         selected_labels = []
-        for child in self.grid_layout.children:
-            if isinstance(child, BoxLayout):
-                # kivy inserts new children in reverse order
-                checkbox = child.children[0]
-                if checkbox.active:
-                    label = child.children[1]
-                    selected_labels.append(label.text)
+        for child in self.data_info_layout.children:
+            checkbox = child.children[0]
+            if checkbox.active:
+                label = child.children[-1]
+                selected_labels.append(label.text.split(".")[1].strip())
         
         print("Selected labels:", selected_labels)
-        return
+        return selected_labels
     
     def update_background(self, instance, value):
         '''
@@ -333,7 +701,7 @@ class MLStarterkit(App):
         '''
         with self.layout.canvas.before:
             self.layout.canvas.before.clear()
-            self.layout.canvas.before.add(Rectangle(source='Assets\BG\default_bg.png',
+            self.layout.canvas.before.add(Rectangle(source='Assets\\BG\\default_bg.png',
                                                     size=self.layout.size,
                                                     pos=self.layout.pos))
         return
@@ -344,6 +712,8 @@ class MLStarterkit(App):
         Returns:
             layout (FloatLayout): The main layout of the application.
         '''
+        self.icon = 'Assets\\icon.png'
+        self.title = 'Machine Learning Starter kit - @37743'
         self.layout = FloatLayout()
         
         self.layout.bind(size=self.update_background, pos=self.update_background)
@@ -402,7 +772,7 @@ BoxLayout:
                         pos_hint={'center_x': 0.5, 'center_y': 0.5},)
         self.layout.add_widget(self.loadreq)
         
-        footer = Label(text=f"GitHub@37743 - {self.__class__.__name__} - 2024 - v{0.1}",
+        footer = Label(text=f"GitHub@37743 - {self.__class__.__name__} - 2024 - v{1.0}",
                         color=MAIN_COLORS["GRAY"],
                         font_family="Msyhl",
                         font_size=12,
