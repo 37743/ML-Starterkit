@@ -1,6 +1,5 @@
 from pandas import read_csv, read_excel
 from tkinter import Tk
-from threading import Thread
 from kivy.app import App
 from kivy.uix.button import Button
 from kivy.uix.floatlayout import FloatLayout
@@ -20,6 +19,7 @@ from Scripts.transformation import perform_transformations
 from Scripts.visualization import generate_visualizations
 from os import path
 from datetime import datetime
+from Scripts.Threading.functhreading import thread
 
 from kivy.clock import (mainthread,
                         Clock)
@@ -42,17 +42,7 @@ Window.size = WINDOW_SIZE
 Window.minimum_width = WINDOW_SIZE[0]-0.1*WINDOW_SIZE[0]
 Window.minimum_height = WINDOW_SIZE[1]-0.1*WINDOW_SIZE[1]
 
-def thread(function):
-    ''' 
-    Creates a new thread with a process using the input function
-    '''
-    def wrap(*args, **kwargs):
-        t = Thread(target=function, args=args, kwargs=kwargs, daemon=True)
-        t.start()
-        return t
-    return wrap
-
-def popup(type):
+def popup(type, text=""):
     '''
     Creates a popup window based on the type.
     Args:
@@ -68,7 +58,7 @@ def popup(type):
                       title_align='center',
                       background_color=MAIN_COLORS["GREEN"])
     elif type == 'failure':
-        popup = Popup(title='CRITICAL FAILURE!',
+        popup = Popup(title='ERROR: '+str(text),
                       content=Image(source='Assets\\icon-fail.png'),
                       size_hint=(None, None), size=(350, 300),
                       separator_color=MAIN_COLORS["RED"],
@@ -94,7 +84,7 @@ def remove_duplicates(df, label, columns):
         label.text = f"Number of Duplicates: {df.duplicated().sum()}"
         popup(type='success')
     except Exception as e:
-        popup(type='failure')
+        popup(type='failure', text=e)
         print(e)
     return
 
@@ -126,7 +116,7 @@ def handle_missing_values(df, method, label, columns):
         
         popup(type='success')
     except Exception as e:
-        popup(type='failure')
+        popup(type='failure', text=e)
         print(e)
     return
 
@@ -215,17 +205,20 @@ class MLStarterkit(App):
         root.withdraw()
         file_path = filedialog.askopenfilename()
         self.file_path_boxlayout.ids["ti"].text = file_path
-        self.loadreq.text = "Click on \"Load File\" to load the selected file."
-        self.load_button.text = "LOAD FILE"
-        self.load_button.disabled = False
         try:
             for widget in [self.scroll_layout, self.file_boxlayout, self.button_box_layout]:
                 self.remove_scrollview(widget)
         except:
             pass
+        self.load_button.text = "LOAD FILE"
+        self.load_button.disabled = False
+        if file_path == '':
+            
+            return
+        self.loadreq.text = "Click on \"Load File\" to load the selected file."
         del(file_path)
         del(root)
-        return self
+        return
 
     def monitor_change(self, thread, function):
         '''
@@ -740,7 +733,6 @@ class MLStarterkit(App):
             None
         '''
         labels = self.get_labels()
-        print(labels)
         try:
             # Data Transformation
             transformations = []
@@ -749,7 +741,6 @@ class MLStarterkit(App):
                 if checkbox.active:
                     label = child.children[-1]
                     transformations.append(label.text)
-            print(transformations)
             
             # Data Visualization
             visualizations = []
@@ -758,22 +749,24 @@ class MLStarterkit(App):
                 if checkbox.active:
                     label = child.children[-1]
                     visualizations.append(label.text)
-            print(visualizations)
 
-            if transformations:
-                self.df = perform_transformations(self.df, transformations, labels)
-            if visualizations:
-                generate_visualizations(self.df, visualizations, labels)
-                
-            popup(type='success')
-            try:
-                for widget in [self.scroll_layout, self.file_boxlayout, self.button_box_layout]:
-                    self.remove_scrollview(widget)
-            except:
-                pass
-            self.open_file(df=self.df)
-        except:
-            popup(type='failure')
+            if transformations or visualizations:
+                v, t = (False, False)
+                if transformations:
+                    t = perform_transformations(self.df, transformations, labels)
+                if visualizations:
+                    v = generate_visualizations(self.df, visualizations, labels)
+                if v or t:
+                    popup(type='success')
+
+            # try:
+            #     for widget in [self.scroll_layout, self.file_boxlayout, self.button_box_layout]:
+            #         self.remove_scrollview(widget)
+            # except:
+            #     pass
+            # self.open_file(df=self.df)
+        except Exception as e:
+            popup(type='failure', text=e)
         return
     
     def update_background(self, instance, value):
