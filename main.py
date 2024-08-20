@@ -420,8 +420,28 @@ class MLStarterkit(App):
             data_description_grid_layout.add_widget(max_val)
         return data_description_grid_layout
 
+    def load_dropcols(self):
+        drop_columns_label = Label(text="Drop selected columns (selecting none will do nothing).",
+                        color=MAIN_COLORS["COLOR"],
+                        font_family="Msyhl",
+                        font_size=14,
+                        size_hint=(0.9, 0.1),
+                        pos_hint={'center_x': 0.5, 'center_y': 0.35})
+        
+        drop_columns_button = Button(text="DROP SELECTED COLUMNS",
+                                    bold=True,
+                                    font_size=14,
+                                    height=30,
+                                    size_hint=(0.5, None),
+                                    pos_hint={'center_x': 0.5, 'center_y': 0.5},
+                                    background_normal="",
+                                    background_color=MAIN_COLORS["GREEN"])
+        drop_columns_button.bind(on_release=lambda x: self.drop_columns())
+
+        return drop_columns_label, drop_columns_button
+    
     def load_dupna(self):
-        duplicates_label = Label(text=f"Number of Duplicates: {self.df.duplicated().sum()}",
+        duplicates_label = Label(text=f"Number of duplicates: {self.df.duplicated().sum()}",
                                 color=MAIN_COLORS["COLOR"],
                                 font_family="Msyhl",
                                 font_size=14,
@@ -438,7 +458,7 @@ class MLStarterkit(App):
                                 background_color=MAIN_COLORS["GREEN"])
         remove_duplicates_button.bind(on_release=lambda x: self.remove_duplicates(duplicates_label, self.get_labels()))
 
-        self.missing_values_label = Label(text=f"Number of Missing Values: {self.df.isnull().sum().sum()}",
+        self.missing_values_label = Label(text=f"Number of missing values: {self.df.isnull().sum().sum()}",
                                 color=MAIN_COLORS["COLOR"],
                                 font_family="Msyhl",
                                 font_size=14,
@@ -588,16 +608,18 @@ class MLStarterkit(App):
                         size_hint=(0.9, 0.5),
                         pos_hint={'center_x': 0.5, 'center_y': 0.35})
         vertical_box_layout.add_widget(data_preprocessing_label)
+        
+        dropcol_label, dropcol_button = self.load_dropcols()
+
         duplicates_label, remove_duplicates_button, mean_button, \
             median_button, mode_button, remove_button = self.load_dupna()
-        vertical_box_layout.add_widget(duplicates_label)
-        vertical_box_layout.add_widget(remove_duplicates_button)
-        vertical_box_layout.add_widget(self.missing_values_label)
-        self.button_box_layout.add_widget(mean_button)
-        self.button_box_layout.add_widget(median_button)
-        self.button_box_layout.add_widget(mode_button)
-        self.button_box_layout.add_widget(remove_button)
-        vertical_box_layout.add_widget(self.button_box_layout)
+        
+        for widget in [mean_button, median_button, mode_button, remove_button]:
+            self.button_box_layout.add_widget(widget)
+        
+        for widget in [dropcol_label, dropcol_button, duplicates_label, remove_duplicates_button,
+                       self.missing_values_label, self.button_box_layout]:
+            vertical_box_layout.add_widget(widget)
         
         # Data Transformation
         data_transformation_label = Label(text="Data Transformation",
@@ -742,6 +764,23 @@ class MLStarterkit(App):
         
         print("Selected labels:", selected_labels)
         return selected_labels
+    
+    def drop_columns(self):
+        '''
+        Drops the selected columns from the DataFrame.
+        Returns:
+            None
+        '''
+        labels = self.get_labels()
+        if labels == []:
+            return
+        try:
+            self.df.drop(labels, axis=1, inplace=True)
+            popup(type='success')
+            self.refresh_scrollview()
+        except Exception as e:
+            popup(type='failure', text=e)
+        return
     
     def perform_operations(self):
         '''
