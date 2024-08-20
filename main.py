@@ -67,63 +67,11 @@ def popup(type, text=""):
     popup.open()
     return
 
-def remove_duplicates(df, label, columns):
-    '''
-    Removes duplicate rows from a DataFrame based on the specified columns.
-    Args:
-        df (pandas.DataFrame): The DataFrame from which duplicates are to be removed.
-        label (Label): The label widget to update with the number of duplicates.
-        columns (list): The list of columns to consider for duplicate removal.
-    Returns:
-        df (pandas.DataFrame): The DataFrame without duplicate rows.
-    '''
-    if columns == []:
-        columns = df.columns
-    try:
-        df.drop_duplicates(subset=columns, inplace=True)
-        label.text = f"Number of Duplicates: {df.duplicated().sum()}"
-        popup(type='success')
-    except Exception as e:
-        popup(type='failure', text=e)
-        print(e)
-    return
-
-def handle_missing_values(df, method, label, columns):
-    '''
-    Handles missing values in a DataFrame based on the selected method and specified columns.
-    Args:
-        df (pandas.DataFrame): The DataFrame containing missing values.
-        method (str): The method to use for handling missing values.
-        label: The label to update with the number of missing values.
-        columns (list): The list of columns to consider for missing value handling.
-    Returns:
-        df (pandas.DataFrame): The DataFrame with missing values handled.
-    '''
-    if columns == []:
-        columns = df.columns
-    try:
-        if method == 'mean':
-            numeric_columns = df[columns].select_dtypes(include=['float64', 'int64']).columns
-            df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].mean())
-        elif method == 'median':
-            numeric_columns = df[columns].select_dtypes(include=['float64', 'int64']).columns
-            df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].median())
-        elif method == 'mode':
-            df[columns] = df[columns].fillna(df[columns].mode().iloc[0])
-        elif method == 'remove':
-            df.dropna(subset=columns, inplace=True)
-        label.text = f"Number of Missing Values: {df[columns].isnull().sum().sum()}"
-        
-        popup(type='success')
-    except Exception as e:
-        popup(type='failure', text=e)
-        print(e)
-    return
-
 class MLStarterkit(App):
     '''
     The main application class.
-    This class represents the main application and contains various methods for file handling, UI updates, and operations.
+    This class represents the main application and contains various methods
+    for file handling, UI updates, and operations.
     '''
     def open_file(self, file_path="", df=None):
         '''
@@ -136,16 +84,13 @@ class MLStarterkit(App):
         # Dataframe starts processing here
         self.df = df
         
+        # Prepare new layout
         self.scroll_layout = ScrollView(size_hint=(0.9, 0.55),
                                 pos_hint={'center_x': 0.5, 'center_y': 0.43},
                                 bar_color=MAIN_COLORS["GREEN"],
                                 bar_inactive_color=MAIN_COLORS["GRAY"],
                                 bar_width=10)
-        
-        self.grid_layout = GridLayout(cols=2, spacing=30, padding=10, size_hint_y=None)
-        self.grid_layout.bind(minimum_height=self.grid_layout.setter('height'))
-
-        if not self.df:
+        if type(self.df) == type(None):
             self.file_path = file_path
             if file_path:
                 print("Selected file:", file_path)
@@ -208,18 +153,33 @@ class MLStarterkit(App):
         try:
             for widget in [self.scroll_layout, self.file_boxlayout, self.button_box_layout]:
                 self.remove_scrollview(widget)
-        except:
-            pass
+        except Exception as e:
+            print(e)
         self.load_button.text = "LOAD FILE"
         self.load_button.disabled = False
         if file_path == '':
-            
+            self.loadreq.text = "No file selected. Please select a file to load."
             return
         self.loadreq.text = "Click on \"Load File\" to load the selected file."
         del(file_path)
         del(root)
         return
 
+    def refresh_scrollview(self):
+        """
+        Refreshes the scroll view by removing
+        the existing widgets and opening a new file.
+        Returns:
+            None
+        """
+        for widget in [self.scroll_layout,
+                       self.file_boxlayout,
+                       self.button_box_layout]:
+            self.remove_scrollview(widget)
+        new_df = self.df
+        self.open_file(df=new_df)
+        return
+    
     def monitor_change(self, thread, function):
         '''
         Monitors the status of a thread and waits for it to complete.
@@ -238,30 +198,33 @@ class MLStarterkit(App):
     def load_filebox(self):
         self.file_boxlayout = BoxLayout(orientation='horizontal',
                                     spacing=10, padding=10,
-                                    size_hint=(0.9, 0.1),
+                                    size_hint=(0.8, 0.1),
                                     pos_hint={'center_x': 0.5, 'center_y': 0.76})
-        self.file_title = Label(text="\""+self.file_path.split("/")[-1]+"\"",
+        title = self.file_path.split("/")[-1]
+        self.file_title = Label(text="\""+(title if len(title) < 10 else title[:10]+"...")
+                                 +"\"",
                                 color=MAIN_COLORS["COLOR"],
                                 font_family="Msyhl",
                                 font_size=21,
-                                size_hint=(0.9, 0.1),
+                                size_hint=(0.4, 0.1),
                                 pos_hint={'center_y': 0.5},
                                 halign='left')
+        del(title)
         self.file_shape = Label(text="Shape: "+str(self.df.shape)+
-                                " - File Size: "+str(round(self.df.memory_usage().sum() / 1024, 2))+" KB",
+                                " - Memory Size: "+str(round(self.df.memory_usage().sum() / 1024, 3))+" KB",
                                 color=MAIN_COLORS["GRAY"],
                                 font_family="Msyhl",
                                 font_size=14,
-                                size_hint=(0.9, 0.1),
+                                size_hint=(0.3, 0.1),
                                 pos_hint={'center_y': 0.5},
-                                halign='left')
+                                halign='center')
         self.file_boxlayout.add_widget(self.file_title)
         self.file_boxlayout.add_widget(self.file_shape)
         self.layout.add_widget(self.file_boxlayout)
         return
     
     def load_datagrid(self):
-        data_grid_layout = GridLayout(cols=len(self.df.columns) if len(self.df.columns) < 7 else 8,
+        data_grid_layout = GridLayout(cols=len(self.df.columns) if len(self.df.columns) < 6 else 7,
                                     spacing=5,
                                     padding=(25,0),
                                     size_hint_y=None)
@@ -269,7 +232,7 @@ class MLStarterkit(App):
 
         # df.head() equivalent
         for num, column in enumerate(self.df.columns):
-            if num == 6:
+            if (num == 5) and (num != len(self.df.columns) - 1):
                 button = Button(text="...",
                                 color=MAIN_COLORS["COLOR"],
                                 height=30,
@@ -280,7 +243,7 @@ class MLStarterkit(App):
                                 background_color=list(MAIN_COLORS.values())[num%(len(MAIN_COLORS)-2)],
                                 size_hint_y=None)
                 data_grid_layout.add_widget(button)
-            elif (num < 6) or (num == len(self.df.columns) - 1):
+            elif (num < 5) or (num == len(self.df.columns) - 1):
                 button = Button(text=column if len(column) < 7 else column[:7]+"...",
                                 color=MAIN_COLORS["COLOR"],
                                 height=30,
@@ -294,7 +257,7 @@ class MLStarterkit(App):
 
         for i in range(5): # 5 rows only
             for num, column in enumerate(self.df.columns):
-                if num == 6:
+                if (num == 5) and (num != len(self.df.columns) - 1):
                     button = Button(text="...",
                                     color=MAIN_COLORS["COLOR"],
                                     height=30,
@@ -304,7 +267,7 @@ class MLStarterkit(App):
                                     background_color=MAIN_COLORS["GRAY"],
                                     size_hint_y=None)
                     data_grid_layout.add_widget(button)
-                elif (num < 6) or num == (len(self.df.columns) - 1):
+                elif (num < 5) or (num == len(self.df.columns) - 1):
                     value = str(self.df[column][i])
                     button = Button(text=value if len(value) < 7 else str(value)[:7]+"...",
                                 color=MAIN_COLORS["COLOR"],
@@ -377,7 +340,7 @@ class MLStarterkit(App):
             data_description_grid_layout.add_widget(label)    
 
         for index, column in enumerate(self.df.columns):
-            if self.df[column].dtype == 'object':
+            if self.df[column].dtype not in ['int64', 'float64']:
                 continue
             button = Button(text=column if len(column) < 7 else column[:7]+"...",
                         color=MAIN_COLORS["COLOR"],
@@ -397,9 +360,10 @@ class MLStarterkit(App):
                         font_family="Msyhl",
                         font_size=14,
                         size_hint_y=None)
+            
             data_description_grid_layout.add_widget(count)
 
-            mean = Label(text=str(round(self.df[column].mean(), 2)),
+            mean = Label(text=str(round(self.df[column].mean(), 3)),
                         color=MAIN_COLORS["COLOR"],
                         height=30,
                         font_family="Msyhl",
@@ -407,7 +371,7 @@ class MLStarterkit(App):
                         size_hint_y=None)
             data_description_grid_layout.add_widget(mean)
 
-            std = Label(text=str(round(self.df[column].std(), 2)),
+            std = Label(text=str(round(self.df[column].std(), 3)),
                         color=MAIN_COLORS["COLOR"],
                         height=30,
                         font_family="Msyhl",
@@ -415,7 +379,7 @@ class MLStarterkit(App):
                         size_hint_y=None)
             data_description_grid_layout.add_widget(std)
 
-            min_val = Label(text=str(self.df[column].min()),
+            min_val = Label(text=str(round(self.df[column].min(), 3)),
                         color=MAIN_COLORS["COLOR"],
                         height=30,
                         font_family="Msyhl",
@@ -423,7 +387,7 @@ class MLStarterkit(App):
                         size_hint_y=None)
             data_description_grid_layout.add_widget(min_val)
 
-            quantile_25 = Label(text=str(self.df[column].quantile(0.25)),
+            quantile_25 = Label(text=str(round(self.df[column].quantile(0.25), 3)),
                         color=MAIN_COLORS["COLOR"],
                         height=30,
                         font_family="Msyhl",
@@ -431,7 +395,7 @@ class MLStarterkit(App):
                         size_hint_y=None)
             data_description_grid_layout.add_widget(quantile_25)
 
-            quantile_50 = Label(text=str(self.df[column].quantile(0.5)),
+            quantile_50 = Label(text=str(round(self.df[column].quantile(0.5), 3)),
                         color=MAIN_COLORS["COLOR"],
                         height=30,
                         font_family="Msyhl",
@@ -439,7 +403,7 @@ class MLStarterkit(App):
                         size_hint_y=None)
             data_description_grid_layout.add_widget(quantile_50)
 
-            quantile_75 = Label(text=str(self.df[column].quantile(0.75)),
+            quantile_75 = Label(text=str(round(self.df[column].quantile(0.75), 3)),
                         color=MAIN_COLORS["COLOR"],
                         height=30,
                         font_family="Msyhl",
@@ -447,7 +411,7 @@ class MLStarterkit(App):
                         size_hint_y=None)
             data_description_grid_layout.add_widget(quantile_75)
 
-            max_val = Label(text=str(self.df[column].max()),
+            max_val = Label(text=str(round(self.df[column].max(), 3)),
                         color=MAIN_COLORS["COLOR"],
                         height=30,
                         font_family="Msyhl",
@@ -472,7 +436,7 @@ class MLStarterkit(App):
                                 pos_hint={'center_x': 0.5, 'center_y': 0.5},
                                 background_normal="",
                                 background_color=MAIN_COLORS["GREEN"])
-        remove_duplicates_button.bind(on_release=lambda x: remove_duplicates(self.df, duplicates_label, self.get_labels()))
+        remove_duplicates_button.bind(on_release=lambda x: self.remove_duplicates(duplicates_label, self.get_labels()))
 
         self.missing_values_label = Label(text=f"Number of Missing Values: {self.df.isnull().sum().sum()}",
                                 color=MAIN_COLORS["COLOR"],
@@ -493,7 +457,7 @@ class MLStarterkit(App):
                      background_normal="",
                      background_color=MAIN_COLORS["GREEN"])
         
-        mean_button.bind(on_release=lambda x: handle_missing_values(self.df ,'mean', self.missing_values_label, self.get_labels()))
+        mean_button.bind(on_release=lambda x: self.handle_missing_values('mean', self.missing_values_label, self.get_labels()))
 
         median_button = Button(text="Fill with Median",
                        bold=True,
@@ -503,7 +467,7 @@ class MLStarterkit(App):
                        pos_hint={'center_x': 0.5, 'center_y': 0.5},
                        background_normal="",
                        background_color=MAIN_COLORS["GREEN"])
-        median_button.bind(on_release=lambda x: handle_missing_values(self.df, 'median', self.missing_values_label, self.get_labels()))
+        median_button.bind(on_release=lambda x: self.handle_missing_values('median', self.missing_values_label, self.get_labels()))
 
         mode_button = Button(text="Fill with Mode",
                      bold=True,
@@ -513,7 +477,7 @@ class MLStarterkit(App):
                      pos_hint={'center_x': 0.5, 'center_y': 0.5},
                      background_normal="",
                      background_color=MAIN_COLORS["GREEN"])
-        mode_button.bind(on_release=lambda x: handle_missing_values(self.df, 'mode', self.missing_values_label, self.get_labels()))
+        mode_button.bind(on_release=lambda x: self.handle_missing_values('mode', self.missing_values_label, self.get_labels()))
 
         remove_button = Button(text="Drop N/A",
                        bold=True,
@@ -523,7 +487,7 @@ class MLStarterkit(App):
                        pos_hint={'center_x': 0.5, 'center_y': 0.5},
                        background_normal="",
                        background_color=MAIN_COLORS["GREEN"])
-        remove_button.bind(on_release=lambda x: handle_missing_values(self.df, 'remove', self.missing_values_label, self.get_labels()))
+        remove_button.bind(on_release=lambda x: self.handle_missing_values('remove', self.missing_values_label, self.get_labels()))
         return duplicates_label, remove_duplicates_button, mean_button,\
             median_button, mode_button, remove_button
     
@@ -709,7 +673,60 @@ class MLStarterkit(App):
         except Exception as e:
             print(e)
         return
-    
+
+    def remove_duplicates(self, label, columns):
+        '''
+        Removes duplicate rows from a DataFrame based on the specified columns.
+        Args:
+            label (Label): The label widget to update with the number of duplicates.
+            columns (list): The list of columns to consider for duplicate removal.
+        Returns:
+            None
+        '''
+        if columns == []:
+            columns = self.df.columns
+        try:
+            self.df.drop_duplicates(subset=columns, inplace=True)
+            label.text = f"Number of Duplicates: {self.df.duplicated().sum()}"
+            popup(type='success')
+            self.refresh_scrollview()
+        except Exception as e:
+            popup(type='failure', text=e)
+            print(e)
+        return
+
+    def handle_missing_values(self, method, label, columns):
+        '''
+        Handles missing values in a DataFrame based on the selected method and specified columns.
+        Args:
+            method (str): The method to use for handling missing values.
+            label: The label to update with the number of missing values.
+            columns (list): The list of columns to consider for missing value handling.
+        Returns:
+            None
+        '''
+        if columns == []:
+            columns = self.df.columns
+        try:
+            if method == 'mean':
+                numeric_columns = self.df[columns].select_dtypes(include=['float64', 'int64']).columns
+                self.df[numeric_columns] = self.df[numeric_columns].fillna(self.df[numeric_columns].mean())
+            elif method == 'median':
+                numeric_columns = self.df[columns].select_dtypes(include=['float64', 'int64']).columns
+                self.df[numeric_columns] = self.df[numeric_columns].fillna(self.df[numeric_columns].median())
+            elif method == 'mode':
+                self.df[columns] = self.df[columns].fillna(self.df[columns].mode().iloc[0])
+            elif method == 'remove':
+                self.df.dropna(subset=columns, inplace=True)
+            label.text = f"Number of Missing Values: {self.df[columns].isnull().sum().sum()}"
+            
+            popup(type='success')
+            self.refresh_scrollview()
+        except Exception as e:
+            popup(type='failure', text=e)
+            print(e)
+        return
+
     def get_labels(self):
         '''
         Performs the selected operation based on the checkboxes in the UI.
@@ -753,18 +770,12 @@ class MLStarterkit(App):
             if transformations or visualizations:
                 v, t = (False, False)
                 if transformations:
-                    t = perform_transformations(self.df, transformations, labels)
+                    t, self.df = perform_transformations(self.df.copy(), transformations, labels)
                 if visualizations:
                     v = generate_visualizations(self.df, visualizations, labels)
                 if v or t:
                     popup(type='success')
-
-            # try:
-            #     for widget in [self.scroll_layout, self.file_boxlayout, self.button_box_layout]:
-            #         self.remove_scrollview(widget)
-            # except:
-            #     pass
-            # self.open_file(df=self.df)
+                    self.refresh_scrollview()
         except Exception as e:
             popup(type='failure', text=e)
         return

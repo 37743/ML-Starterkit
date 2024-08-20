@@ -42,27 +42,27 @@ def generate_visualizations(data, visualization_types, column_subset):
         
     for visualization_type in visualization_types:
         if visualization_type in ['Scatter Plot', 'Line Plot', 'Bar Plot']:
-            column_subset = data[column_subset].select_dtypes(exclude=['object']).columns
+            column_subset = data[column_subset].select_dtypes(['int64', 'float64']).columns
             # Cartesian product of column_subset
             column_pairs = list(combinations(column_subset, 2))
             for pair in column_pairs:
                 column1, column2 = pair
                 if visualization_type == 'Scatter Plot':
-                    plt.scatter(data[column1], data[column2])
+                    plt.scatter(data[column1], data[column2], color='xkcd:turquoise')
                     plt.title(f'Scatter Plot - {column1} vs {column2}')
                     plt.xlabel(column1)
                     plt.ylabel(column2)
                     plt.savefig(path.join(folder_path, f'scatter_plot_{column1}_{column2}.png'), bbox_inches='tight')
                     plt.close()
                 elif visualization_type == 'Line Plot':
-                    plt.plot(data[column1], data[column2])
+                    plt.plot(data[column1], data[column2], color='xkcd:turquoise')
                     plt.title(f'Line Plot - {column1} vs {column2}')
                     plt.xlabel(column1)
                     plt.ylabel(column2)
                     plt.savefig(path.join(folder_path, f'line_plot_{column1}_{column2}.png'), bbox_inches='tight')
                     plt.close()
                 elif visualization_type == 'Bar Plot':
-                    plt.bar(data[column1], data[column2])
+                    plt.bar(data[column1], data[column2], color='xkcd:turquoise')
                     plt.title(f'Bar Plot - {column1} vs {column2}')
                     plt.xlabel(column1)
                     plt.ylabel(column2)
@@ -71,16 +71,17 @@ def generate_visualizations(data, visualization_types, column_subset):
 
         for column in column_subset:
             if visualization_type == 'Histogram':
-                plt.hist(data[column])
+                plt.hist(data[column], bins=10, alpha=0.6, color='xkcd:turquoise',
+                         edgecolor='black', linewidth=1.2)
                 plt.title(f'Histogram - {column}')
                 plt.xlabel('Values')
                 plt.ylabel('Frequency')
                 plt.savefig(path.join(folder_path, f'histogram_{column}.png'), bbox_inches='tight')
                 plt.close()
             elif visualization_type == 'Boxplot':
-                if data[column].dtype == 'object':
+                if data[column].dtype not in ['int64', 'float64']:
                     continue
-                plt.boxplot(data[column])
+                plt.boxplot(data[column], showmeans=True, meanline=True)
                 plt.title(f'Boxplot - {column}')
                 plt.xlabel('Columns')
                 plt.ylabel('Values')
@@ -92,14 +93,20 @@ def generate_visualizations(data, visualization_types, column_subset):
                                                      autopct='%1.1f%%',
                                                      startangle=90,
                                                      legend=True,
-                                                     colormap='tab20c')
+                                                     colormap='GnBu')
                     plt.title(f'Pie Chart - {column}')
                     plt.savefig(path.join(folder_path, f'pie_chart_{column}.png'), bbox_inches='tight')
                     plt.close()
             elif visualization_type == 'Violin Plot':
-                if data[column].dtype == 'object':
+                if data[col].dtype not in ['int64', 'float64']:
                     continue
-                plt.violinplot(data[column])
+                violin_parts = plt.violinplot(data[column],
+                               showmeans=True,
+                               showmedians=True,
+                               showextrema=True)
+                for pc in violin_parts['bodies']:
+                    pc.set_facecolor('xkcd:turquoise')
+                    pc.set_edgecolor('black')
                 plt.title(f'Violin Plot - {column}')
                 plt.xlabel('Columns')
                 plt.ylabel('Values')
@@ -109,7 +116,7 @@ def generate_visualizations(data, visualization_types, column_subset):
         if visualization_type == 'Correlation Heatmap':
             col_numeric = data[column_subset].select_dtypes(include=['int64', 'float64']).columns
             _, ax = plt.subplots()
-            im = ax.imshow(data[col_numeric].corr(), cmap='YlGn', interpolation='nearest')
+            im = ax.imshow(data[col_numeric].corr(), cmap='GnBu', interpolation='nearest')
             ax.grid(which="minor", color="w", linestyle='-', linewidth=3)
             ax.figure.colorbar(im, ax=ax)
             for i in range(len(data[col_numeric].columns)):
